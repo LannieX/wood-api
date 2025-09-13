@@ -5,10 +5,13 @@ const app = express();
 app.use(express.json());
 
 // โหลด credential (service account JSON)
+const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+
 const auth = new google.auth.GoogleAuth({
-  keyFile: "credentials.json",
+  credentials,
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
+
 const sheets = google.sheets({ version: "v4", auth });
 
 // กำหนดข้อมูล sheet
