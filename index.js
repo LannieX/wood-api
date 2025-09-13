@@ -24,14 +24,55 @@ const TYPE_RANGE = "woodType!A:Z";
 // sheetId mapping
 const SHEET_IDS = { data: 0, address: 1, carNumber: 2, woodType: 3 };
 
+// Helper function to get range by sheet name
+const getRange = (sheet) => {
+  const map = { data: DATA_RANGE, address: ADDRESS_RANGE, carNumber: CAR_RANGE, woodType: TYPE_RANGE };
+  return map[sheet];
+};
+const getSheetId = (sheet) => SHEET_IDS[sheet];
+
 // --- GET ---
-app.get("/:sheet(data|address|car|type)", async (req, res) => {
+app.get("/data", async (req, res) => {
   try {
-    const { sheet } = req.params;
-    const rangeMap = { data: DATA_RANGE, address: ADDRESS_RANGE, car: CAR_RANGE, type: TYPE_RANGE };
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: rangeMap[sheet],
+      range: DATA_RANGE,
+    });
+    res.json(result.data.values);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/address", async (req, res) => {
+  try {
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: ADDRESS_RANGE,
+    });
+    res.json(result.data.values);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/car", async (req, res) => {
+  try {
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: CAR_RANGE,
+    });
+    res.json(result.data.values);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/type", async (req, res) => {
+  try {
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: TYPE_RANGE,
     });
     res.json(result.data.values);
   } catch (err) {
@@ -40,70 +81,104 @@ app.get("/:sheet(data|address|car|type)", async (req, res) => {
 });
 
 // --- POST ---
-app.post("/:sheet(data|address|car|type)", async (req, res) => {
+app.post("/data", async (req, res) => {
   try {
-    const { sheet } = req.params;
     const { values } = req.body; // expects [[col1, col2, ...]]
-    const rangeMap = { data: DATA_RANGE, address: ADDRESS_RANGE, car: CAR_RANGE, type: TYPE_RANGE };
-
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: rangeMap[sheet],
+      range: DATA_RANGE,
       valueInputOption: "RAW",
       requestBody: { values },
     });
-
     res.json({ status: "success" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// --- PUT ---
-app.put("/:sheet(data|address|car|type)/:id", async (req, res) => {
+app.post("/address", async (req, res) => {
   try {
-    const { sheet, id } = req.params;
-    const { values } = req.body; // expects [col1, col2, ...]
+    const { values } = req.body;
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: ADDRESS_RANGE,
+      valueInputOption: "RAW",
+      requestBody: { values },
+    });
+    res.json({ status: "success" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    const rangeMap = { data: DATA_RANGE, address: ADDRESS_RANGE, car: CAR_RANGE, type: TYPE_RANGE };
-    const sheetId = SHEET_IDS[sheet];
+app.post("/car", async (req, res) => {
+  try {
+    const { values } = req.body;
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: CAR_RANGE,
+      valueInputOption: "RAW",
+      requestBody: { values },
+    });
+    res.json({ status: "success" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
+app.post("/type", async (req, res) => {
+  try {
+    const { values } = req.body;
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: TYPE_RANGE,
+      valueInputOption: "RAW",
+      requestBody: { values },
+    });
+    res.json({ status: "success" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- PUT & DELETE ---
+// ทำตาม pattern เดียวกับ GET/POST แยก route ทีละ sheet
+// ตัวอย่าง PUT สำหรับ /data/:id
+app.put("/data/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { values } = req.body;
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: rangeMap[sheet],
+      range: DATA_RANGE,
     });
-
     const rows = result.data.values;
     const idx = rows.findIndex(r => r[0] === id);
     if (idx === -1) return res.status(404).json({ error: "not found" });
-
     rows[idx] = values;
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheet}!A${idx + 1}:Z${idx + 1}`,
+      range: `data!A${idx + 1}:Z${idx + 1}`,
       valueInputOption: "RAW",
       requestBody: { values: [rows[idx]] },
     });
-
     res.json({ status: "updated" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// --- DELETE ---
-app.delete("/:sheet(data|address|car|type)/:id", async (req, res) => {
+// DELETE ตัวอย่าง /data/:id
+app.delete("/data/:id", async (req, res) => {
   try {
-    const { sheet, id } = req.params;
-    const sheetId = SHEET_IDS[sheet];
-    const rangeMap = { data: DATA_RANGE, address: ADDRESS_RANGE, car: CAR_RANGE, type: TYPE_RANGE };
+    const { id } = req.params;
+    const sheetId = getSheetId("data");
 
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: rangeMap[sheet],
+      range: DATA_RANGE,
     });
-
     const rows = result.data.values;
     const idx = rows.findIndex(r => r[0] === id);
     if (idx === -1) return res.status(404).json({ error: "not found" });
@@ -111,12 +186,9 @@ app.delete("/:sheet(data|address|car|type)/:id", async (req, res) => {
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
       requestBody: [{
-        deleteDimension: {
-          range: { sheetId, dimension: "ROWS", startIndex: idx, endIndex: idx + 1 }
-        }
+        deleteDimension: { range: { sheetId, dimension: "ROWS", startIndex: idx, endIndex: idx + 1 } }
       }],
     });
-
     res.json({ status: "deleted" });
   } catch (err) {
     res.status(500).json({ error: err.message });
