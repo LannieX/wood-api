@@ -4,7 +4,7 @@ import { google } from "googleapis";
 const app = express();
 app.use(express.json());
 
-// โหลด credential (service account JSON)
+// โหลด credential จาก ENV
 const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
 
 const auth = new google.auth.GoogleAuth({
@@ -14,19 +14,24 @@ const auth = new google.auth.GoogleAuth({
 
 const sheets = google.sheets({ version: "v4", auth });
 
-// กำหนดข้อมูล sheet
-const SPREADSHEET_ID = "1BTgtm9OwmICB15NvCLqat-wQqW1dCuc9YY98-V7hvUw";
+// Spreadsheet & Ranges
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 const DATA_RANGE = "data!A:Z";
 const ADDRESS_RANGE = "address!A:Z";
 const CAR_RANGE = "carNumber!A:Z";
 const TYPE_RANGE = "woodType!A:Z";
 
-// === GET: อ่านข้อมูลทั้งหมด ===
-app.get("/data", async (req, res) => {
+// sheetId mapping
+const SHEET_IDS = { data: 0, address: 1, carNumber: 2, woodType: 3 };
+
+// --- GET ---
+app.get("/:sheet(data|address|car|type)", async (req, res) => {
   try {
+    const { sheet } = req.params;
+    const rangeMap = { data: DATA_RANGE, address: ADDRESS_RANGE, car: CAR_RANGE, type: TYPE_RANGE };
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: DATA_RANGE,
+      range: rangeMap[sheet],
     });
     res.json(result.data.values);
   } catch (err) {
@@ -34,101 +39,49 @@ app.get("/data", async (req, res) => {
   }
 });
 
-app.get("/address", async (req, res) => {
+// --- POST ---
+app.post("/:sheet(data|address|car|type)", async (req, res) => {
   try {
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: ADDRESS_RANGE,
-    });
-    res.json(result.data.values);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    const { sheet } = req.params;
+    const { values } = req.body; // expects [[col1, col2, ...]]
+    const rangeMap = { data: DATA_RANGE, address: ADDRESS_RANGE, car: CAR_RANGE, type: TYPE_RANGE };
 
-app.get("/car", async (req, res) => {
-  try {
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: CAR_RANGE,
-    });
-    res.json(result.data.values);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.get("/type", async (req, res) => {
-  try {
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: TYPE_RANGE,
-    });
-    res.json(result.data.values);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// === POST: เพิ่มข้อมูล ===
-app.post("/data", async (req, res) => {
-  try {
-    const { id, name, email } = req.body;
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: DATA_RANGE,
+      range: rangeMap[sheet],
       valueInputOption: "RAW",
-      requestBody: {
-        values: [[id, name, email]],
-      },
+      requestBody: { values },
     });
+
     res.json({ status: "success" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post("/address", async (req, res) => {
+// --- PUT ---
+app.put("/:sheet(data|address|car|type)/:id", async (req, res) => {
   try {
-    const { id, name, email } = req.body;
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: ADDRESS_RANGE,
-      valueInputOption: "RAW",
-      requestBody: {
-        values: [[id, name, email]],
-      },
-    });
-    res.json({ status: "success" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    const { sheet, id } = req.params;
+    const { values } = req.body; // expects [col1, col2, ...]
 
-// === PUT: อัปเดตข้อมูลตาม id ===
-app.put("/data/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, email } = req.body;
+    const rangeMap = { data: DATA_RANGE, address: ADDRESS_RANGE, car: CAR_RANGE, type: TYPE_RANGE };
+    const sheetId = SHEET_IDS[sheet];
 
-    // อ่านข้อมูลก่อน
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: DATA_RANGE,
+      range: rangeMap[sheet],
     });
 
     const rows = result.data.values;
-    const headers = rows[0];
     const idx = rows.findIndex(r => r[0] === id);
-
     if (idx === -1) return res.status(404).json({ error: "not found" });
 
-    if (name) rows[idx][1] = name;
-    if (email) rows[idx][2] = email;
+    rows[idx] = values;
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `address!A${idx + 1}:G${idx + 1}`,
+      range: `${sheet}!A${idx + 1}:Z${idx + 1}`,
       valueInputOption: "RAW",
       requestBody: { values: [rows[idx]] },
     });
@@ -139,71 +92,29 @@ app.put("/data/:id", async (req, res) => {
   }
 });
 
-app.put("/address/:id", async (req, res) => {
+// --- DELETE ---
+app.delete("/:sheet(data|address|car|type)/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { name, email } = req.body;
-
-    // อ่านข้อมูลก่อน
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: ADDRESS_RANGE,
-    });
-
-    const rows = result.data.values;
-    const headers = rows[0];
-    const idx = rows.findIndex(r => r[0] === id);
-
-    if (idx === -1) return res.status(404).json({ error: "not found" });
-
-    if (name) rows[idx][1] = name;
-    if (email) rows[idx][2] = email;
-
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `address!A${idx + 1}:G${idx + 1}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [rows[idx]] },
-    });
-
-    res.json({ status: "updated" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// === DELETE: ลบข้อมูลตาม id ===
-app.delete("/data/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
+    const { sheet, id } = req.params;
+    const sheetId = SHEET_IDS[sheet];
+    const rangeMap = { data: DATA_RANGE, address: ADDRESS_RANGE, car: CAR_RANGE, type: TYPE_RANGE };
 
     const result = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: DATA_RANGE,
+      range: rangeMap[sheet],
     });
 
     const rows = result.data.values;
     const idx = rows.findIndex(r => r[0] === id);
-
     if (idx === -1) return res.status(404).json({ error: "not found" });
-
-    // ลบแถวออก
-    const requests = [
-      {
-        deleteDimension: {
-          range: {
-            sheetId: 0, // sheet index (0 ถ้าเป็นชีทแรก)
-            dimension: "ROWS",
-            startIndex: idx,
-            endIndex: idx + 1,
-          },
-        },
-      },
-    ];
 
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
-      requestBody: { requests },
+      requestBody: [{
+        deleteDimension: {
+          range: { sheetId, dimension: "ROWS", startIndex: idx, endIndex: idx + 1 }
+        }
+      }],
     });
 
     res.json({ status: "deleted" });
@@ -212,43 +123,6 @@ app.delete("/data/:id", async (req, res) => {
   }
 });
 
-app.delete("/address/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const result = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: ADDRESS_RANGE,
-    });
-
-    const rows = result.data.values;
-    const idx = rows.findIndex(r => r[0] === id);
-
-    if (idx === -1) return res.status(404).json({ error: "not found" });
-
-    // ลบแถวออก
-    const requests = [
-      {
-        deleteDimension: {
-          range: {
-            sheetId: 0, // sheet index (0 ถ้าเป็นชีทแรก)
-            dimension: "ROWS",
-            startIndex: idx,
-            endIndex: idx + 1,
-          },
-        },
-      },
-    ];
-
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
-      requestBody: { requests },
-    });
-
-    res.json({ status: "deleted" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.listen(3000, () => console.log("🚀 API running on http://localhost:3000"));
+// --- Start server ---
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`🚀 API running on http://localhost:${PORT}`));
