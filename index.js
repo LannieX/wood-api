@@ -87,15 +87,17 @@ app.get("/type", async (req, res) => {
 // === POST: เพิ่มข้อมูล ===
 app.post("/data", async (req, res) => {
   try {
-    const { id, name, email } = req.body;
+    const { address, woodType, carNumber, weight, price, payBill, dateAt } = req.body;
+
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: DATA_RANGE,
       valueInputOption: "RAW",
       requestBody: {
-        values: [[id, name, email]],
+        values: [[address, woodType, carNumber, weight, price, payBill, dateAt]],
       },
     });
+
     res.json({ status: "success" });
   } catch (err) {
     res.status(500).json({ error: err.message });
