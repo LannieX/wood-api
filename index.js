@@ -87,14 +87,14 @@ app.get("/type", async (req, res) => {
 // === POST: เพิ่มข้อมูล ===
 app.post("/data", async (req, res) => {
   try {
-    const { address, woodType, carNumber, weight, price, payBill, dateAt } = req.body;
+    const { address, woodType, carNumber, weight, price, payBill, dateAt, cutPrice, carryPrice, carPrice, carTPrice, constPrice, profitPrice } = req.body;
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
       range: DATA_RANGE,
       valueInputOption: "RAW",
       requestBody: {
-        values: [[address, woodType, carNumber, weight, price, payBill, dateAt]],
+        values: [[address, woodType, carNumber, weight, price, payBill, dateAt, cutPrice, carryPrice, carPrice, carTPrice, constPrice, profitPrice]],
       },
     });
 
